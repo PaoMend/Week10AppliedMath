@@ -399,6 +399,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1455675216}
+  - component: {fileID: 1455675217}
   m_Layer: 0
   m_Name: Sphere
   m_TagString: Untagged
@@ -421,6 +422,25 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1455675217
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1455675214}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f5b75222e5ac4174a8e77a24432bdb84, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SphereMesh
+  lineMat: {fileID: 2100000, guid: eade48809563a2f43b1b3d018f2079d8, type: 2}
+  longitudeSegments: 12
+  latitudeSegments: 8
+  scale: 1
+  focalLength: 2
+  xRotation: 0
+  yRotation: 0
 --- !u!1 &1873316983
 GameObject:
   m_ObjectHideFlags: 0

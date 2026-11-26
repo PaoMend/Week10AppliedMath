@@ -1,114 +1,157 @@
-using System;
-using System.Collections.Generic;
 using UnityEngine;
+using System.Collections.Generic;
 
 public class SphereMesh : MonoBehaviour
 {
-    #region Static Variables
-
-    private Vector3[] verts =
-    {
-        new(-1, -1, -1), new(1, -1, -1), // 0, 1
-        new(1, 1, -1), new(-1, 1, -1), // 2, 3
-        new(-1, -1, 1), new(1, -1, 1), // 4, 5
-        new(1, 1, 1), new(-1, 1, 1)
-    }; // 6, 7
-
-    private int[] edges =
-    {
-        0, 1, 1, 2, 2, 3, 3, 0, // front ring
-        4, 5, 5, 6, 6, 7, 7, 4, // back ring
-        0, 4, 1, 5, 2, 6, 3, 7
-    }; // connectors
-
-    private int[][] faces =
-    {
-        new[] { 0, 1, 2, 3 }, new[] { 5, 4, 7, 6 }, new[] { 4, 0, 3, 7 }, // counter-clockwise
-        new[] { 1, 5, 6, 2 }, new[] { 3, 2, 6, 7 }, new[] { 0, 4, 5, 1 }
-    }; // from outside
-
-    private readonly List<int> visibleEdges = new();
-
-    #endregion
-
     [SerializeField] private Material lineMat;
-    [SerializeField] private Vector3 position = Vector3.zero;
+    [SerializeField] private int longitudeSegments = 12;
+    [SerializeField] private int latitudeSegments = 8;
     [SerializeField] private float scale = 1;
+    [SerializeField] private float focalLength = 20f;
+    [SerializeField] private float xRotation = 0;
     [SerializeField] private float yRotation = 0;
-
-    [Range(1, 500)][SerializeField] private float focalLength = 20f;
-
+    private Vector3[] verts;
+    private int[][] faces;
     private Mesh mesh;
-    private readonly List<Vector3> actualPosition = new();
+    private List<Vector3> actualPosition = new();
+    private List<int> visibleEdges = new();
 
-    #region Unity Functions
-
-    private void Awake()
+    void Awake()
     {
+        GenerateSphere();
+
         mesh = new Mesh();
+
         gameObject.AddComponent<MeshFilter>().mesh = mesh;
         gameObject.AddComponent<MeshRenderer>().material = lineMat;
     }
 
+    void GenerateSphere()
+    {
+        longitudeSegments = Mathf.Max(6, longitudeSegments);
+        latitudeSegments = Mathf.Max(2, latitudeSegments);
+        List<Vector3> vertices = new List<Vector3>();
+        List<int[]> polygons = new List<int[]>();
+
+        vertices.Add(new Vector3(0, 1, 0));
+
+        for (int lat = 1; lat < latitudeSegments; lat++)
+        {
+            float theta = Mathf.PI * lat / latitudeSegments;
+
+            for (int lon = 0; lon < longitudeSegments; lon++)
+            {
+                float phi = 2 * Mathf.PI * lon / longitudeSegments;
+                float x = Mathf.Sin(theta) * Mathf.Cos(phi);
+                float y = Mathf.Cos(theta);
+                float z = Mathf.Sin(theta) * Mathf.Sin(phi);
+
+                vertices.Add(new Vector3(x, y, z));
+            }
+        }
+
+        int bottomIndex = vertices.Count;
+        vertices.Add(new Vector3(0, -1, 0));
+
+        for (int lon = 0; lon < longitudeSegments; lon++)
+        {
+            int next = (lon + 1) % longitudeSegments;
+
+            polygons.Add(new int[]
+            {
+                0,
+                1 + lon,
+                1 + next
+            });
+        }
+
+        for (int lat = 0; lat < latitudeSegments - 2; lat++)
+        {
+            for (int lon = 0; lon < longitudeSegments; lon++)
+            {
+                int next = (lon + 1) % longitudeSegments;
+
+                int a = 1 + lat * longitudeSegments + lon;
+                int b = 1 + lat * longitudeSegments + next;
+
+                int c = b + longitudeSegments;
+                int d = a + longitudeSegments;
+
+                polygons.Add(new int[] { a, b, c, d });
+            }
+        }
+
+        int lastRing = 1 + (latitudeSegments - 2) * longitudeSegments;
+
+        for (int lon = 0; lon < longitudeSegments; lon++)
+        {
+            int next = (lon + 1) % longitudeSegments;
+
+            polygons.Add(new int[]
+            {
+                lastRing + lon,
+                bottomIndex,
+                lastRing + next
+            });
+        }
+
+        verts = vertices.ToArray();
+        faces = polygons.ToArray();
+    }
+
     void LateUpdate()
     {
+        yRotation += 30f * Time.deltaTime;
+        xRotation += 20f * Time.deltaTime;
+
         actualPosition.Clear();
+
         foreach (var point in verts)
         {
             actualPosition.Add(Project(point));
         }
 
         mesh.vertices = actualPosition.ToArray();
-        visibleEdges.Clear();
 
+        visibleEdges.Clear();
 
         foreach (var f in faces)
         {
-            if (!FacesCamera(actualPosition[f[0]], actualPosition[f[1]], actualPosition[f[2]])) continue;
-            for (int i = 0; i < 4; i++)
+            if (!FacesCamera(
+                actualPosition[f[0]],
+                actualPosition[f[1]],
+                actualPosition[f[2]]))
+                continue;
+
+            for (int i = 0; i < f.Length; i++)
             {
                 visibleEdges.Add(f[i]);
-                visibleEdges.Add(f[(i + 1) % 4]);
+                visibleEdges.Add(f[(i + 1) % f.Length]);
             }
-
         }
-
         mesh.SetIndices(visibleEdges, MeshTopology.Lines, 0);
         mesh.RecalculateBounds();
     }
 
-    #endregion
-
-    #region Helper
-
-    private Vector2 Project(Vector3 point)
+    Vector3 Project(Vector3 point)
     {
-        point *= .5f;
-
-        //rotate via Y axis
-        var xRot = point.x * Mathf.Cos(yRotation * Mathf.Deg2Rad) - point.z * Mathf.Sin(yRotation * Mathf.Deg2Rad);
-        var zRot = point.x * Mathf.Sin(yRotation * Mathf.Deg2Rad) + point.z * Mathf.Cos(yRotation * Mathf.Deg2Rad);
-        // new rotated point
+        // Y-axis rotation
+        float xRot = point.x * Mathf.Cos(yRotation * Mathf.Deg2Rad) - point.z * Mathf.Sin(yRotation * Mathf.Deg2Rad);
+        float zRot = point.x * Mathf.Sin(yRotation * Mathf.Deg2Rad) + point.z * Mathf.Cos(yRotation * Mathf.Deg2Rad);
         point = new Vector3(xRot, point.y, zRot);
 
-        point = new Vector3(point.x + position.x, point.y + position.y, point.z + position.z);
+        // X rot
+        float yRot = point.y * Mathf.Cos(xRotation * Mathf.Deg2Rad) - point.z * Mathf.Sin(xRotation * Mathf.Deg2Rad);
+        zRot = point.y * Mathf.Sin(xRotation * Mathf.Deg2Rad) + point.z * Mathf.Cos(xRotation * Mathf.Deg2Rad);
+        point = new Vector3(point.x, yRot, zRot);
 
+        float p = focalLength / (focalLength + point.z);
 
-
-        // get perspective with rotated point
-        var p = focalLength / (focalLength + point.z);
-
-        return new Vector2(point.x, point.y) * scale * p;
+        return new Vector3(point.x * scale * p, point.y * scale * p, 0);
     }
 
-    private bool FacesCamera(Vector2 a, Vector2 b, Vector2 c)
+    bool FacesCamera(Vector3 a, Vector3 b, Vector3 c)
     {
-        return (b - a).x * (c - a).y - (b - a).y * (c - a).x > 0;
+        return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x) > 0;
     }
-
-
-
-    #endregion
-
-
 }
